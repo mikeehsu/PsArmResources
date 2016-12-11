@@ -8,6 +8,8 @@ This module tries to create a one-for-one replacement of similar AzureRM calls t
 Example of a basic VirtualMachine deployment:
 
 ````
+Import-Module "PsArmResources" 
+
 $template = New-PsArmTemplate 
 
 $template.resources += `
