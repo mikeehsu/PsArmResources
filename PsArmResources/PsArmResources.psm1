@@ -1114,7 +1114,7 @@ Function Add-PsArmVmDependsOn
         [PsArmVm] $VM,
 
         [parameter(Mandatory=$True, Position=1, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [string] $Id
+        [array] $Id
     )
 
     $VM.dependsOn += $Id
