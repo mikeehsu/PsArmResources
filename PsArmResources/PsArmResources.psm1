@@ -1092,6 +1092,7 @@ Function Add-PsArmVmDataDisk
     $dataDisk = [PsArmVmStorageDataDisk]::New()
     $dataDisk.name = $Name
     $dataDisk.diskSizeGB = $DiskSizeInGB
+    $dataDisk.caching = $Caching
     $dataDisk.lun = $Lun
     $dataDisk.createOption = $CreateOption
     $dataDisk.vhd = [PsArmVmStorageUri]::New()
