@@ -1,3 +1,4 @@
+
 # PsArmResources - Powershell module to create ARM templates
 #
 # Written in 2016 by Mike Hsu
@@ -18,14 +19,18 @@ Class PsArmId {
     [string] $id
 }
 
+Class PsArmName {
+    [string] $name
+}
+
 # ipconfig
 Class PsArmIpConfigProperties {
     [string] $privateIPAddress
     [string] $privateIpAllocationMethod = "Dynamic"
     [PsArmId] $publicIpAddress
     [PsArmId] $subnet
-    [array] $loadBalancerBackendAddressPools
-    [array] $loadBalancerInboundNatRules
+    [array] $loadBalancerBackendAddressPools = @()
+    [array] $loadBalancerInboundNatRules = @()
 }
 
 Class PsArmIpConfig {
@@ -229,7 +234,69 @@ Class PsArmAvailabilitySet {
     [string] $type = 'Microsoft.Compute/availabilitySets'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [array] $dependsOn = @()
     [PsArmAvailabilitySetProperties] $properties
+}
+
+# Load Balancers
+
+Class PsArmLoadBalancerInboundNatRuesProperties {
+    [PsArmId] $frontendIpConfiguration
+    [string] $protocol
+    [int] $frontEndPort
+    [int] $backendPort
+    [bool] $enableFloatingIP
+}
+
+Class PsArmLoadBalancerInboundNatRules {
+    [string] $name
+    [PsArmLoadBalancerInboundNatRuesProperties] $properties
+}
+
+Class PsArmLoadBalancerLoadBalancingRulesProperties {
+    [PsArmId] $frontendIPConfiguration
+    [PsArmId] $backendAddressPool
+    [string] $protocol
+    [int] $frontendPort
+    [int] $backendPort
+    [bool] $enableFloatingIP
+    [int] $idleTimeoutInMinutes
+    [PsArmId] $probe
+}
+
+Class PsArmLoadBalancerLoadBalancingRule {
+    [string] $name
+    [PsArmLoadBalancerLoadBalancingRulesProperties] $properties = [PsArmLoadBalancerLoadBalancingRulesProperties]::New()
+}
+
+Class PsArmLoadBalancerProbeProperties {
+    [string] $protocol
+    [int] $port
+    [int] $intervalInSeconds
+    [int] $timeoutInSeconds
+    [int] $numberOfProbes
+}
+
+Class PsArmLoadBalancerProbe {
+    [string] $name
+    [PsArmLoadBalancerProbeProperties] $properties = [PsArmLoadBalancerProbeProperties]::New()
+}
+
+Class PsArmLoadBalancerProperties {
+    [array] $frontendIPConfigurations = @()
+    [array] $backendAddressPools = @()
+    [array] $inboundNatRules = @()
+    [array] $loadbalancingRules = @()
+    [array] $probes = @()
+}
+
+Class PsArmLoadBalancer {
+    [string] $apiVersion = '2016-03-30'
+    [string] $type = 'Microsoft.Network/loadBalancers'
+    [string] $name
+    [string] $location = '[resourceGroup().location]'
+    [array] $dependsOn = @()
+    [PsArmLoadBalancerProperties] $properties = [PsArmLoadBalancerProperties]::New()
 }
 
 # Virtual Machines
@@ -449,7 +516,7 @@ Class PsArmVirtualNetworkPeeringProperties {
     [bool] $allowForwardedTraffic = $False
     [bool] $allowGatewayTransit = $False
     [bool] $useRemoteGateways = $False
-    [PsArmId] $remoteVirutalNetwork
+    [PsArmId] $remoteVirtualNetwork
 }
 
 Class PsArmVirtualNetworkPeering {
@@ -458,7 +525,7 @@ Class PsArmVirtualNetworkPeering {
     [string] $name
     [string] $location = '[resourceGroup().location]'
     [PsArmVirtualNetworkPeeringProperties] $properties = [PsArmVirtualNetworkPeeringProperties]::New()
-
+    [array] $dependsOn
 }
 
 # template
@@ -521,6 +588,23 @@ Function New-PsArmId
     }
 
     return $armId
+}
+
+#######################################m################################
+
+Function New-PsArmName
+{
+    [CmdletBinding()]
+
+    Param (
+        [parameter(Mandatory=$True)]
+        [string] $Name
+    )
+
+    $x = [PsArmName]::New()
+    $x.name = $Name
+
+    return $x
 }
 
 #######################################m################################
@@ -1114,7 +1198,7 @@ Function Add-PsArmVmDependsOn
         [PsArmVm] $VM,
 
         [parameter(Mandatory=$True, Position=1, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [array] $Id
+        [string] $Id
     )
 
     $VM.dependsOn += $Id
@@ -1139,7 +1223,7 @@ Function Set-PsArmVmOsDisk
         [string] $VhdUri,
 
         [parameter(Mandatory=$False, Position=4, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [String] $Caching,
+        [String] $Caching = 'ReadWrite',
 
         [parameter(Mandatory=$False, Position=5, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $SourceImageUri,
@@ -1159,16 +1243,23 @@ Function Set-PsArmVmOsDisk
 
     Write-Verbose "Scripting OS disk $VhdUri from $SourceImageUri"
 
+    # onlyl set the osType if copying from an image
     $osType = 'Windows'
     if ($Linux) {
         $osType = 'Linux'
     }
 
-    $VM.properties.storageProfile = [PsArmVmStorageProfile]::New()
+    if (-not $VM.properties.storageProfile) {
+        $VM.properties.storageProfile = [PsArmVmStorageProfile]::New()
+    }
+
     $VM.properties.storageProfile.osDisk = [PsArmVmStorageOsDisk]::New()
-    $VM.properties.storageProfile.osDisk.image = [PsArmVmStorageUri]::New()
-    $VM.properties.storageProfile.osDisk.osType = $osType
-    $VM.properties.storageProfile.osDisk.image.uri = $SourceImageUri
+
+    if ($SourceImageUri) {
+        $VM.properties.storageProfile.osDisk.osType = $osType
+        $VM.properties.storageProfile.osDisk.image = [PsArmVmStorageUri]::New()
+        $VM.properties.storageProfile.osDisk.image.uri = $SourceImageUri
+    }
 
     $VM.properties.storageProfile.osDisk.name = $Name
     $VM.properties.storageProfile.osDisk.createOption = $CreateOption
@@ -1190,24 +1281,24 @@ Function Set-PsArmVmSourceImage
         [parameter(Mandatory=$True, Position=0, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [PsArmVm] $VM,
 
-        [parameter(Mandatory=$True, Position=2, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [parameter(Mandatory=$True, Position=1, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $Publisher,
 
-        [parameter(Mandatory=$True, Position=3, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [parameter(Mandatory=$True, Position=2, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $Offer,
 
-        [parameter(Mandatory=$True, Position=4, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [parameter(Mandatory=$True, Position=3, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $Sku,
 
-        [parameter(Mandatory=$True, Position=5, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [parameter(Mandatory=$True, Position=4, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $Version
     )
 
     Write-Verbose "Scripting OS disk from publisher:$Publisher Sku:$Sku"
-    # $vm.plan = [PsArmVmPlan]::New()
-    # $vm.plan.name = $PlanName
-    # $vm.plan.product = $Product
-    # $vm.plan.publisher = $Publisher
+
+    if (-not $vm.properties.storageProfile) {
+        $vm.properties.storageProfile = [PsArmVmStorageProfile]::New()
+    }
 
     $vm.properties.storageProfile.imageReference = [PsArmVmStorageImageReference]::New()
     $vm.properties.storageProfile.imageReference.publisher = $Publisher
@@ -1386,7 +1477,7 @@ Function Set-PsArmVnetRouteTable
         [array] $SubnetName,
 
         [parameter(Mandatory=$False)]
-        [switch] $ApplyToAll
+        [switch] $ApplyToAllSubnets
 
     )
 
@@ -1400,7 +1491,7 @@ Function Set-PsArmVnetRouteTable
         }
 
         # set the RouteTable, if applicable
-        if ($ApplyToAll -or ($SubnetName -contains $vnet.properties.subnets[$i].name)) {
+        if ($ApplyToAllSubnets -or ($SubnetName -contains $vnet.properties.subnets[$i].name)) {
             $vnet.properties.subnets[$i].properties.routeTable = `
                 New-PsArmId -ResourceType 'Microsoft.Network/RouteTables' -ResourceName $RouteTableName
         }
@@ -1548,7 +1639,10 @@ Function New-PsArmVirtualNetworkPeering
     $vnetPeer.properties.allowForwardedTraffic = $allowForwardedTraffic
     $vnetPeer.properties.allowGatewayTransit = $allowGatewayTransit
     $vnetPeer.properties.useRemoteGateways = $useRemoteGateways
-    $vnetPeer.properties.remoteVirutalNetwork = New-PsArmId -ResourceId $Vnet2Id
+    $vnetPeer.properties.remoteVirtualNetwork = New-PsArmId -ResourceId $Vnet2Id
+    $vnetPeer.dependsOn += "[resourceId('Microsoft.Network/virtualNetworks', '$($Vnet1Name)')]"
+
+    return $vnetPeer
 }
 
 ##########################################################################
@@ -1679,4 +1773,507 @@ Function New-PsArmVmCustomScriptExtension
     $ext.properties.protectedSettings.storageAccountKey = $StorageAccountKey
 
     $ext
+}
+
+##########################################################################
+
+Function New-PsArmLoadBalancer
+{
+    [CmdletBinding()]
+
+    Param (
+        [parameter(Mandatory=$True)]
+        [string] $Name
+    )
+
+    $loadBalancer = [PsArmLoadBalancer]::New()
+    $loadBalancer.name = $Name
+
+    return $loadBalancer
+}
+
+##########################################################################
+
+Function Add-PsArmLoadBalancerFrontEndIpConfiguration
+{
+    [CmdletBinding()]
+
+    Param (
+        [parameter(Mandatory=$True, Position=0, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [PsArmLoadBalancer] $loadBalancer,
+
+        [parameter(Mandatory=$True)]
+        [string] $Name,
+
+        [parameter(Mandatory=$True)]
+        [string] $SubnetId,
+
+        [parameter(Mandatory=$False)]
+        [string] $PublicIpAddressId,
+
+        [parameter(Mandatory=$False)]
+        [string] $PrivateIpAddress
+    )
+
+    Write-Verbose "Scripting Load Balancer FrontEndIpConfiguration $Name on $SubnetId"
+
+    # assign all ipConfiguration settings
+    $ipConfig = [PsArmIpConfig]::New()
+    $ipConfig.name = "$Name"
+    $ipConfig.properties = [PsArmIpConfigProperties]::New()
+
+    if ($PrivateIpAddress -and $PrivateIpAddress -ne '') {
+        $ipConfig.properties.privateIpAddress = $PrivateIpAddress
+        $ipConfig.properties.privateIpAllocationMethod = 'Static'
+    }
+
+    # associate the PublicIp
+    if ($PublicIpAddressId) {
+        $ipConfig.properties.publicIpAddress = [PsArmId]::New()
+        $ipConfig.properties.publicIpAddress.id = $PublicIpAddressId
+
+        $nic.dependsOn += $PublicIpAddressId
+    }
+
+    $ipConfig.properties.subnet = [PsArmId]::New()
+    $ipConfig.properties.subnet.id = $SubnetId
+
+    # return the results
+    $loadBalancer.properties.frontendIpConfigurations += $ipConfig
+    return $loadBalancer
+}
+
+
+##########################################################################
+
+Function Add-PsArmLoadBalancerBackendAddressPool
+{
+    [CmdletBinding()]
+
+    Param (
+        [parameter(Mandatory=$True, Position=0, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [PsArmLoadBalancer] $loadBalancer,
+
+        [parameter(Mandatory=$True)]
+        [string] $Name
+    )
+
+    # return the results
+    $loadBalancer.properties.backendAddressPools += New-PsArmName -Name $Name
+    return $loadBalancer
+}
+
+##########################################################################
+
+Function Add-PsArmLoadBalancerProbe
+{
+    [CmdletBinding()]
+
+    Param (
+        [parameter(Mandatory=$True, Position=0, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [PsArmLoadBalancer] $loadBalancer,
+
+        [parameter(Mandatory=$True)]
+        [string] $Name,
+
+        [parameter(Mandatory=$True)]
+        [string] $Protocol,
+
+        [parameter(Mandatory=$True)]
+        [string] $Port,
+
+        [parameter(Mandatory=$False)]
+        [string] $IntervalInSeconds = 15,
+
+        [parameter(Mandatory=$False)]
+        [string] $TimeoutInSeconds = 31,
+
+        [parameter(Mandatory=$True)]
+        [string] $NumberOfProbes
+    )
+
+    $probe = [PsArmLoadBalancerProbe]::New()
+    $probe.Name = $Name
+    $probe.properties.protocol = $Protocol
+    $probe.properties.port = $Port
+    $probe.properties.intervalInSeconds = $IntervalInSeconds
+    $probe.properties.timeoutInSeconds = $TimeoutInSeconds
+    $probe.properties.numberOfProbes = $NumberOfProbes
+
+    # return the results
+    $loadBalancer.properties.probes += $probe
+    return $loadBalancer
+
+}
+
+##########################################################################
+
+Function Add-PsArmLoadBalancerLoadBalancingRule
+{
+    [CmdletBinding()]
+
+    Param (
+        [parameter(Mandatory=$True, Position=0, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [PsArmLoadBalancer] $loadBalancer,
+
+        [parameter(Mandatory=$True)]
+        [string] $Name,
+
+        [parameter(Mandatory=$True)]
+        [string] $FrontEndIpConfigurationName,
+
+        [parameter(Mandatory=$True)]
+        [string] $BackendAddressPoolName,
+
+        [parameter(Mandatory=$True)]
+        [string] $ProbeName,
+
+        [parameter(Mandatory=$True)]
+        [string] $Protocol,
+
+        [parameter(Mandatory=$True)]
+        [int] $FrontEndPort,
+
+        [parameter(Mandatory=$True)]
+        [int] $BackendPort,
+
+        [parameter(Mandatory=$False)]
+        [bool] $EnableFloatingIp = $false,
+
+        [parameter(Mandatory=$False)]
+        [int] $IdleTimeoutInMinutes = 10
+    )
+
+    $rule = [PsArmLoadBalancerLoadBalancingRule]::New()
+    $rule.name = $Name
+    $rule.properties.frontendIPConfiguration = New-PsArmid -ResourceId "[concat(resourceId('Microsoft.Network/loadBalancers', '$($loadBalancer.name)'), '/frontendIPConfigurations/$($FrontEndIpConfigurationName)')]"
+    $rule.properties.backendAddressPool = New-PsArmId -ResourceId "[concat(resourceId('Microsoft.Network/loadBalancers', '$($loadBalancer.name)'), '/backendAddressPools/$($BackendAddressPoolName)')]"
+    $rule.properties.probe = New-PsArmId -ResourceId "[concat(resourceId('Microsoft.Network/loadBalancers', '$($loadBalancer.name)'), '/probes/$($ProbeName)')]"
+    $rule.properties.protocol = $Protocol
+    $rule.properties.frontendPort = $FrontEndPort
+    $rule.properties.backendPort = $BackendPort
+    $rule.properties.enableFloatingIP = $EnableFloatingIp
+    $rule.properties.idleTimeoutInMinutes = $IdleTimeoutInMinutes
+
+    # return the results
+    $loadBalancer.properties.loadbalancingRules += $rule
+    return $loadBalancer
+}
+
+
+#######################################m################################
+
+Function New-PsArmQuickVm
+{
+    [CmdletBinding()]
+
+    Param(
+        [parameter(Mandatory=$True)]
+        [string] $VmName,
+
+        [parameter(Mandatory=$False)]
+        [string] $osType,
+
+        [parameter(Mandatory=$True)]
+        [string] $VNetName,
+
+        [parameter(Mandatory=$True)]
+        [ValidateNotNull()] #No value
+        [array] $SubnetName,
+
+        [parameter(Mandatory=$True)]
+        [string] $VmSize,
+
+        [parameter(Mandatory=$True)]
+        [string] $StorageAccountResourceGroupName,
+
+        [parameter(Mandatory=$True)]
+        [string] $StorageAccountName,
+
+        [parameter(Mandatory=$False)]
+        [string] $VhdImageName,
+
+        [Parameter(Mandatory=$False)]
+        [string] $osDiskName = "$($VmName)_OsDisk",
+
+        [Parameter(Mandatory=$False)]
+        [array] $DataDiskStorageAccountName,
+
+        [Parameter(Mandatory=$False)]
+        [array] $DataDiskSize,
+
+        [Parameter(Mandatory=$False)]
+        [array] $StaticIPAddress,
+
+        [Parameter(Mandatory=$False)]
+        [bool] $CreatePublicIp,
+
+        [Parameter(Mandatory=$False)]
+        [string] $AdminUsername = "adminstrator",
+
+        [Parameter(Mandatory=$False)]
+        [string] $AdminPassword = "p@55w0rd",
+        [Parameter(Mandatory=$False)]
+        [string] $PlanName,
+
+        [Parameter(Mandatory=$False)]
+        [string] $Product,
+
+        [Parameter(Mandatory=$False)]
+        [string] $Publisher,
+
+        [Parameter(Mandatory=$False)]
+        [string] $Offer,
+
+        [Parameter(Mandatory=$False)]
+        [string] $Sku,
+
+        [Parameter(Mandatory=$False)]
+        [string] $Version = 'latest',
+
+        [Parameter(Mandatory=$False)]
+        [string] $AvailabilitySetName,
+
+        [Parameter(Mandatory=$False)]
+        [string] $CustomExtensionUri,
+
+        [Parameter(Mandatory=$False)]
+        [array] $NetworkSecurityGroupName,
+
+        [Parameter(Mandatory=$False)]
+        [string] $dependsOn
+    )
+
+    $resources = @()
+
+    Write-Verbose "Scripting QuickVM $VmName"
+
+    # get location from vNet
+    $vNet = Get-AzureRmVirtualNetwork -ResourceGroupName $VNetName -Name $VNetName
+    if (-not $vNet) {
+        throw "Invalid VNetName $VnetName"
+    }
+    $location = $vNet.Location
+
+    # ensure vhdimage exists
+    # $imageStorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $global:AzureStorageResourceGroupName -Name $global:AzureStorageAccountName -ErrorAction "Stop"
+
+    # verify storage & vnet locations
+    $storageAccount = Get-AzureRmStorageAccount -ResourceGroupName $StorageAccountResourceGroupName -Name $StorageAccountName -ErrorAction "Stop"
+    if ($vNet.Location -ne $storageAccount.Location) {
+        Write-Error "VirtualNetwork location and StorageAccount location do not match"
+        return
+    }
+
+    # verify image info
+    if ($Publisher) {
+        # marketplace
+        if ((-not $PlanName) -or (-not $Product) -or (-not $Offer) -or (-not $Sku)) {
+            Write-Error 'PlanName, Product, Offer and Sku required when Publisher provided.'
+            throw 1
+        }
+
+    } else {
+        Write-Error "Custom image currently not supported"
+        return
+
+        # # custom image
+        # if (-not $vhdImageName.EndsWith('.vhd')) {
+        #     $vhdImageName = $vhdImageName + '.vhd'
+        # }
+
+        # # ensure that vhdimage exists in destination OS storage
+        # if ($storageAccountName -ne $global:AzureStorageAccountName) {
+        #     # verify the storage account has the image provided
+        #     Write-Verbose "Copying VHD image"
+
+        #     $sourceStorageKey = $(Get-AzureRmStorageAccountKey -ResourceGroupName $global:AzureStorageResourceGroupName -Name $global:AzureStorageAccountName).Value[0]
+        #     $destStorageKey = $(Get-AzureRmStorageAccountKey -ResourceGroupName $StorageAccountResourceGroupName -Name $StorageAccountName).Value[0]
+
+        #     $sourceStorageContext = New-AzureStorageContext -StorageAccountName $global:AzureStorageAccountName -StorageAccountKey $sourceStorageKey -ErrorAction Stop
+        #     $destStorageContext   = New-AzureStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $destStorageKey -ErrorAction Stop
+
+
+        #     # ensure vhdimages container exists
+        #     $container = Get-AzureStorageContainer -Context $destStorageContext -Name 'vhdimages' -ErrorAction SilentlyContinue
+        #     if (-not $container) {
+        #         $container = New-AzureStorageContainer -Context $destStorageContext -Name 'vhdimages'
+        #     }
+
+        #     $blobCopy = Start-CopyAzureStorageBlob -Force `
+        #         -Context $sourceStorageContext -SrcContainer "vhdimages" -SrcBlob $vhdImageName `
+        #         -DestContext $destStorageContext -DestContainer "vhdimages" -DestBlob $vhdImageName `
+        #         -ErrorAction "Stop"
+
+        #     do {
+        #         sleep 10
+        #         $copyState = $blobCopy | Get-AzureStorageBlobCopyState
+        #         $message = $CopyState.Source.AbsolutePath + " " + $CopyState.Status + " {0:N2}%" -f (($CopyState.BytesCopied/$CopyState.TotalBytes)*100)
+        #         Write-Verbose $message
+        #     } until ($copyState.Status -eq "Success")
+        # }
+
+    }
+
+    # create Pip
+    if ($CreatePublicIp) {
+        $pipName = $vmName + "Pip0"
+        $domainNameLabel = $VmName.ToLower()
+
+        $resources += New-PsArmPublicIpAddress -Name $pipName -Location $location -DomainNameLabel $domainNameLabel
+    }
+
+
+    # get username/password
+    # if (-not $AdminUsername) {
+    #     $AdminUsername = $(Get-AzureKeyVaultSecret -VaultName "$global:AzureKeyVaultName" -Name "username" -ErrorAction "Stop").SecretValueText
+    # }
+
+    # if (-not $AdminPassword) {
+    #     $AdminPassword = $(Get-AzureKeyVaultSecret -VaultName "$global:AzureKeyVaultName" -Name "password" -ErrorAction "Stop").SecretValueText
+    # }
+
+    # storageProfile
+    $osDiskUri = '{0}vmdisks/{1}_osdisk.vhd' -f $storageAccount.PrimaryEndpoints.Blob.ToString(), $vmName
+
+
+    # Create the VM
+    $vm = New-PsArmVmConfig -VmName $VmName -VmSize $VmSize
+    $vm = $vm | Set-PsArmVmOperatingSystem -ComputerName $VmName -AdminUserName $AdminUserName -AdminPassword $AdminPassword -ProvisionVmAgent
+
+    if ($Publisher) {
+        $vm.plan = [PsArmVmPlan]::New()
+        $vm.plan.name = $Sku
+        $vm.plan.product = $Product
+        $vm.plan.publisher = $Publisher
+
+        $vm = Set-PsArmVmSourceImage -VM $vm -Publisher $Publisher -Offer $Offer -Sku $Sku -Version 'latest'
+        $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -CreateOption 'FromImage'
+    } else {
+        $sourceImageUri = $($storageAccount.PrimaryEndpoints.Blob.ToString()) + "vhdimages/" + $vhdImageName
+        $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -SourceImageUri $sourceImageUri -CreateOption 'FromImage'
+    }
+
+    # create one or more Nics
+    $i = 0
+    foreach ($thisSubnetName in $SubnetName) {
+        # get subnet Id
+        $thisSubnetId = $($vnet.Subnets | Where-Object {$_.Name -eq $thisSubnetName}).Id
+        if (-not $thisSubnetId) {
+            Write-Error "Subnet $thisSubnetName not found as part of $($vnet.Name)"
+            return
+        }
+
+        # get corresponding static Ip
+        $thisIpAddress = $null
+        if ($StaticIpAddress) {
+            if ($i -le $StaticIpAddress.Count) {
+                $thisIpAddress = $StaticIpAddress[$i]
+            }
+        }
+
+        # get cooresponding Nsg
+        $thisNsgId = $null
+        if ($NetworkSecurityGroupName -and $NetworkSecurityGroupName[$i]) {
+            $thisNsg = Find-AzureRmResource -ResourceType 'Microsoft.Network/networkSecurityGroups' -ResourceNameContains $NetworkSecurityGroupName[$i] | Where-Object {$_.Name -eq $NetworkSecurityGroupName[$i]}
+            if ($thisNsg) {
+                $thisNsgId = $thisNsg.ResourceId
+            } else {
+                Write-Verbose "Nsg $networkSecurityGroupName assumed to be in template"
+                $thisNsgId = "[resourceId('Microsoft.Network/networkSecurityGroups', '$networkSecurityGroupName')]"
+            }
+        }
+
+        # set publicIp if created
+        $publicIpAddressId = $null
+        if ($CreatePublicIp -and $i -eq 0) {
+            # assume publicIpAddress is being created in this template
+            $publicIpAddressId = "[resourceId('Microsoft.Network/publicIPAddresses', '$pipName')]"
+        }
+
+        # create the Nic
+        $nicName = $vmName + "Nic" + $i.ToString()
+        $nic = New-PsArmNetworkInterface -Name $nicName -Location $location -SubnetId $thisSubnetId -PrivateIpAddress $thisIpAddress -PublicIpAddressId $publicIpAddressId -NetworkSecurityGroupId $thisNsgId
+
+        # add Nic to the resource
+        $resources += $nic
+
+        # add NIC to VM
+        $vm = Add-PsArmVmNetworkInterface -VM $vm -Id "[resourceId('Microsoft.Network/networkInterfaces', '$($nic.Name)')]"
+
+        $i++
+    }
+
+    # Specify the data disk
+    if ($DataDiskSize) {
+        for ($i=0; $i -lt $DataDiskSize.Count; $i++) {
+            $dataVhdStorageAccountName = $DataDiskStorageAccountName[$i]
+            $dataVhdDiskSize = $DataDiskSize[$i]
+            $dataDiskName = "$($VmName)_dataDisk_$($i)"
+
+            if (-not $dataVhdStorageAccountName) {
+                $dataVhdStorageAccountName = $StorageAccountName
+            }
+
+            $dataVhdResource = Find-AzureRmResource -ResourceName $dataVhdStorageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
+
+            if ($dataVhdResource) {
+                $dataVhdStorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $($dataVhdResource.ResourceGroupName) -Name $dataVhdStorageAccountName -ErrorAction "Stop"
+                $endpoint = $dataVhdStorageAccount.PrimaryEndPoints.Blob.ToString()
+            } else {
+                Write-Error "$dataVhdStorageAccountName StorageAccount does not exist, please create and try again."
+                return
+                # storage not found, assume the storage must be created as part of the template
+                # $parts = $storageAccountName.PrimaryEndPoint.Blob.Split('./')
+                # $endpoint = $parts[0] + '//' +  $dataVhdStorageAccountName + '.' + $($parts[3..6] -join '.') + '/'
+
+                # $vm = Add-PsArmVmDependsOn -VM $vm -Id "[resourceId('Microsoft.Storage/storageAccounts', '$dataVhdStorageAccountName')]"
+            }
+            $dataDiskVhdUri = '{0}vmdisks/{1}_datadisk_{2}.vhd' -f $endpoint, $vmName, $i
+
+            $vm = Add-PsArmVmDataDisk -Vm $vm -Name $dataDiskName `
+                    -VhdUri $dataDiskVhdUri `
+                    -Lun $i `
+                    -CreateOption 'Empty' `
+                    -DiskSizeInGB $dataVhdDiskSize
+        }
+    }
+
+    # set availability set
+    if ($AvailabilitySetName) {
+        $vm = Set-PsArmAvailabilitySet -VM $vm  `
+            -Id "[resourceId('Microsoft.Compute/availabilitySets', '$AvailabilitySetName')]"
+    }
+
+    # add any dependsOn passed in
+    if ($dependsOn -and $dependsOn -ne '') {
+        $vm = Add-PsArmVmDependsOn -VM $vm -Id $dependsOn
+    }
+
+    $resources += $vm
+
+    # Specify custom extension script
+    if ($CustomExtensionUri) {
+        $uriParts = $CustomExtensionUri.Split('/')
+        $uriStorageAccountName = $uriParts[2].Split('.')[0]
+        $uriContainer = $uriParts[3]
+        $uriBlobName = $uriParts[4..$($uriParts.Count-1)] -Join '/'
+
+        $storage = Get-AzureRmResource | Where-object {$_.Name -eq $uriStorageAccountName -and $_.ResourceType -eq 'Microsoft.Storage/storageAccounts'}
+        if (-not $storage) {
+            Write-Error "Invaild CustomExtentionUri. $uriStorageAccount Storage account not found."
+            return
+        }
+
+        $uriStorageAccountKey = $(Get-AzureRmStorageAccountKey -ResourceGroupName $($storage.ResourceGroupName) -Name $uriStorageAccountName).Value[0]
+
+        $resources += New-PsArmVmCustomScriptExtension `
+                        -VMName $vm.Name `
+                        -CustomExtensionUri $CustomExtensionUri `
+                        -StorageAccountName $uriStorageAccountName `
+                        -StorageAccountKey $uriStorageAccountKey
+    }
+
+    # Deploy new VM
+    return $resources
 }
