@@ -924,6 +924,9 @@ Function Save-PsArmTemplate
         [string] $TemplateFile
     )
 
+
+    Write-Verbose "Saving PsArmTemplate to $templateFile"
+
     $( ConvertTo-Json $template -Depth 10 ).Replace('\u0027',"'").Replace('"schema":','"$schema":') > $templateFile
 
 }
@@ -1386,7 +1389,7 @@ Function Set-PsArmVnetRouteTable
         [array] $SubnetName,
 
         [parameter(Mandatory=$False)]
-        [switch] $ApplyToAll
+        [switch] $ApplyToAllSubnets
 
     )
 
@@ -1400,7 +1403,7 @@ Function Set-PsArmVnetRouteTable
         }
 
         # set the RouteTable, if applicable
-        if ($ApplyToAll -or ($SubnetName -contains $vnet.properties.subnets[$i].name)) {
+        if ($ApplyToAllSubnets -or ($SubnetName -contains $vnet.properties.subnets[$i].name)) {
             $vnet.properties.subnets[$i].properties.routeTable = `
                 New-PsArmId -ResourceType 'Microsoft.Network/RouteTables' -ResourceName $RouteTableName
         }
@@ -1540,6 +1543,9 @@ Function New-PsArmVirtualNetworkPeering
         [parameter(Mandatory=$False)]
         [switch] $useRemoteGateways = $False
     )
+
+    Write-Verbose "Scripting Virtual Network Peering $Name"
+
 
     $vnetPeer = [PsArmVirtualNetworkPeering]::New()
     $vnetPeer.Name = $($Vnet1Name) + '/' + $($Name)
