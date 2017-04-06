@@ -1008,6 +1008,9 @@ Function Save-PsArmTemplate
         [string] $TemplateFile
     )
 
+
+    Write-Verbose "Saving PsArmTemplate to $templateFile"
+
     $( ConvertTo-Json $template -Depth 10 ).Replace('\u0027',"'").Replace('"schema":','"$schema":') > $templateFile
 
 }
@@ -1631,6 +1634,9 @@ Function New-PsArmVirtualNetworkPeering
         [parameter(Mandatory=$False)]
         [switch] $useRemoteGateways = $False
     )
+
+    Write-Verbose "Scripting Virtual Network Peering $Name"
+
 
     $vnetPeer = [PsArmVirtualNetworkPeering]::New()
     $vnetPeer.Name = $($Vnet1Name) + '/' + $($Name)
