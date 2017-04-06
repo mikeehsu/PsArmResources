@@ -1198,7 +1198,7 @@ Function Add-PsArmVmDependsOn
         [PsArmVm] $VM,
 
         [parameter(Mandatory=$True, Position=1, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [string] $Id
+        [array] $Id
     )
 
     $VM.dependsOn += $Id
@@ -2041,7 +2041,7 @@ Function New-PsArmQuickVm
         [array] $NetworkSecurityGroupName,
 
         [Parameter(Mandatory=$False)]
-        [string] $dependsOn
+        [array] $dependsOn
     )
 
     $resources = @()
@@ -2246,7 +2246,7 @@ Function New-PsArmQuickVm
     }
 
     # add any dependsOn passed in
-    if ($dependsOn -and $dependsOn -ne '') {
+    if ($dependsOn -and $dependsOn.count -ne 0) {
         $vm = Add-PsArmVmDependsOn -VM $vm -Id $dependsOn
     }
 
