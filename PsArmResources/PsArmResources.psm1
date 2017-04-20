@@ -963,7 +963,7 @@ Function New-PsArmStorageAccount
         [string] $Tier = 'Standard',
 
         [parameter(Mandatory=$False)]
-        [ValidateSet('LRS','GRS','RA-GRS','ZRS')]
+        [ValidateSet('LRS','GRS','RAGRS','ZRS')]
         [string] $Replication = 'LRS'
     )
 
@@ -1007,6 +1007,9 @@ Function Save-PsArmTemplate
         [parameter(Mandatory=$True)]
         [string] $TemplateFile
     )
+
+
+    Write-Verbose "Saving PsArmTemplate to $templateFile"
 
     $( ConvertTo-Json $template -Depth 10 ).Replace('\u0027',"'").Replace('"schema":','"$schema":') > $templateFile
 
@@ -1198,7 +1201,7 @@ Function Add-PsArmVmDependsOn
         [PsArmVm] $VM,
 
         [parameter(Mandatory=$True, Position=1, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [string] $Id
+        [array] $Id
     )
 
     $VM.dependsOn += $Id
@@ -1632,6 +1635,9 @@ Function New-PsArmVirtualNetworkPeering
         [switch] $useRemoteGateways = $False
     )
 
+    Write-Verbose "Scripting Virtual Network Peering $Name"
+
+
     $vnetPeer = [PsArmVirtualNetworkPeering]::New()
     $vnetPeer.Name = $($Vnet1Name) + '/' + $($Name)
     $vnetPeer.properties = [PsArmVirtualNetworkPeeringProperties]::New()
@@ -2041,7 +2047,7 @@ Function New-PsArmQuickVm
         [array] $NetworkSecurityGroupName,
 
         [Parameter(Mandatory=$False)]
-        [string] $dependsOn
+        [array] $dependsOn
     )
 
     $resources = @()
@@ -2246,7 +2252,7 @@ Function New-PsArmQuickVm
     }
 
     # add any dependsOn passed in
-    if ($dependsOn -and $dependsOn -ne '') {
+    if ($dependsOn -and $dependsOn.count -ne 0) {
         $vm = Add-PsArmVmDependsOn -VM $vm -Id $dependsOn
     }
 
