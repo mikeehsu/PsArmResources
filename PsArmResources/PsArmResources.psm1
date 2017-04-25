@@ -49,35 +49,9 @@ Class PsArmStorageAccount {
     [string] $type = 'Microsoft.Storage/storageAccounts'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [PsArmStorageSku] $sku
     [string] $kind = 'Storage'
-    [string] $tags
-}
-
-# User Defined Routes
-
-Class PsArmUserDefinedRouteProperties {
-    [string] $addressPrefix
-    [string] $nextHopType
-    [string] $nextHopIpAddress
-}
-
-Class PsArmUserDefinedRoute {
-    [string] $name
-    [PsArmUserDefinedRouteProperties] $properties
-}
-
-Class PsArmUserDefinedRouteTableProperties {
-    [array] $routes
-}
-
-Class PsArmUserDefinedRouteTable {
-    [string] $type = 'Microsoft.Network/routeTables'
-    [string] $name
-    [string] $apiVersion = '2016-03-30'
-    [string] $location = '[resourceGroup().location]'
-    [array] $resources
-    [array] $dependsOn
 }
 
 # Security Group
@@ -108,6 +82,7 @@ Class PsArmNetworkSecurityGroup {
     [string] $apiVersion = '2016-03-30'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [PsArmNetworkSecurityGroupProperties] $properties
 }
 
@@ -132,6 +107,7 @@ Class PsArmPublicIpAddress {
     [string] $name
     [string] $apiVersion = '2016-03-30'
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [PsArmPublicIpAddressProperties] $properties
     [array] $resources = @()
     [array] $dependsOn = @()
@@ -157,6 +133,7 @@ Class PsArmNetworkInterface {
     [PsArmNetworkInterfaceProperties] $properties
     [string] $apiVersion = '2016-03-30'
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [array] $resources = @()
     [array] $dependsOn = @()
 }
@@ -234,6 +211,7 @@ Class PsArmAvailabilitySet {
     [string] $type = 'Microsoft.Compute/availabilitySets'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [array] $dependsOn = @()
     [PsArmAvailabilitySetProperties] $properties
 }
@@ -295,6 +273,7 @@ Class PsArmLoadBalancer {
     [string] $type = 'Microsoft.Network/loadBalancers'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [array] $dependsOn = @()
     [PsArmLoadBalancerProperties] $properties = [PsArmLoadBalancerProperties]::New()
 }
@@ -384,6 +363,7 @@ Class PsArmVm {
     [string] $name
     [string] $apiVersion = '2015-06-15'
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [PsArmVmPlan] $plan
     [PsArmVmProperties] $properties
     [array] $resources = @()
@@ -417,6 +397,7 @@ Class PsArmVnet {
     [string] $apiVersion = '2015-06-15'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [string] $comments
     [array] $dependsOn
     [PsArmVnetProperties] $properties
@@ -442,6 +423,7 @@ Class PsArmVnetGateway {
     [string] $apiVersion = '2016-03-30'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [array] $dependsOn
     [PsArmVNetGatewayProperties] $properties = [PsArmVnetGatewayProperties]::New()
 }
@@ -468,6 +450,7 @@ Class PsArmRouteTable {
     [string] $apiVersion = '2016-03-30'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [PsArmRouteTableProperties] $properties
 }
 
@@ -488,6 +471,7 @@ Class PsArmLocalNetworkGateway {
     [string] $apiVersion = '2016-03-30'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [PsArmLocalNetworkGatewayProperties] $properties = [PsArmLocalNetworkGatewayProperties]::New()
 }
 
@@ -505,6 +489,7 @@ Class PsArmConnection {
     [string] $apiVersion = '2016-03-30'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [PsArmConnectionProperties] $properties = [PsArmConnectionProperties]::New()
     [array] $dependsOn
 }
@@ -524,6 +509,7 @@ Class PsArmVirtualNetworkPeering {
     [string] $apiVersion = '2016-06-01'
     [string] $name
     [string] $location = '[resourceGroup().location]'
+    [hashtable] $tags
     [PsArmVirtualNetworkPeeringProperties] $properties = [PsArmVirtualNetworkPeeringProperties]::New()
     [array] $dependsOn
 }
@@ -621,6 +607,9 @@ Function New-PsArmAvailabilitySet
         [string] $Location,
 
         [parameter(Mandatory=$False)]
+        [hashtable] $tags,
+
+        [parameter(Mandatory=$False)]
         [string] $FaultDomainCount = 3,
 
         [parameter(Mandatory=$False)]
@@ -631,6 +620,10 @@ Function New-PsArmAvailabilitySet
     $availabilitySet = [PsArmAvailabilitySet]::New()
     $availabilitySet.name = $Name
     $availabilitySet.location = $Location
+
+    if ($tags) {
+        $availabilitySet.tags = $tags
+    }
 
     $availabilitySet.properties = [PsArmAvailabilitySetProperties]::New()
     $availabilitySet.properties.platformFaultDomainCount = $FaultDomainCount
@@ -650,7 +643,10 @@ Function New-PsArmNetworkSecurityGroup
         [string] $Name,
 
         [parameter(Mandatory=$False)]
-        [string] $Location
+        [string] $Location,
+
+        [parameter(Mandatory=$False)]
+        [hashtable] $tags
     )
 
     Write-Verbose "Scripting NetworkSecurityGroups $Name"
@@ -661,6 +657,10 @@ Function New-PsArmNetworkSecurityGroup
 
     if ($Location) {
        $nsg.location = $Location
+    }
+
+    if ($tags) {
+        $nsg.tags = $tags
     }
 
     return $nsg
@@ -750,6 +750,9 @@ Function New-PsArmNetworkInterface
         [string] $Location = '[resourceGroup().location]',
 
         [parameter(Mandatory=$False)]
+        [hashtable] $tags,
+
+        [parameter(Mandatory=$False)]
         [array] $DnsServer,
 
         [parameter(Mandatory=$False)]
@@ -779,6 +782,10 @@ Function New-PsArmNetworkInterface
     $nic.name = $Name
     $nic.location = $Location
     $nic.properties = [PsArmNetworkInterfaceProperties]::New()
+
+    if ($tags) {
+        $nic.tags = $tags
+    }
 
     # assign all ipConfiguration settings
     $ipConfig = [PsArmIpConfig]::New()
@@ -837,6 +844,9 @@ Function New-PsArmPublicIpAddress
         [string] $Location,
 
         [parameter(Mandatory=$False)]
+        [hashtable] $tags,
+
+        [parameter(Mandatory=$False)]
         [string] $DomainNameLabel,
 
         [parameter(Mandatory=$False)]
@@ -856,6 +866,10 @@ Function New-PsArmPublicIpAddress
 
     if ($Location) {
         $pip.location = $Location
+    }
+
+    if ($tags) {
+        $pip.tags = $tags
     }
 
     $pip.properties = [PsArmPublicIpAddressProperties]::New()
@@ -928,6 +942,9 @@ Function New-PsArmRouteTable
         [string] $Location,
 
         [parameter(Mandatory=$False)]
+        [hashtable] $tags,
+
+        [parameter(Mandatory=$False)]
         [array] $routes
     )
 
@@ -938,6 +955,10 @@ Function New-PsArmRouteTable
 
     if ($Location) {
        $routeTable.location = $Location
+    }
+    
+    if ($tags) {
+        $routeTable.tags = $tags
     }
 
     $routeTable.properties = [PsArmRouteTableProperties]::New()
@@ -959,6 +980,9 @@ Function New-PsArmStorageAccount
         [string] $Location,
 
         [parameter(Mandatory=$False)]
+        [hashtable] $tags,
+
+        [parameter(Mandatory=$False)]
         [ValidateSet('Standard', 'Premium')]
         [string] $Tier = 'Standard',
 
@@ -972,6 +996,10 @@ Function New-PsArmStorageAccount
     $storageAccount = [PsArmStorageAccount]::New()
     $storageAccount.name = $Name
     $storageAccount.location = $Location
+
+    if ($tags) {
+        $storageAccount.tags = $tags
+    }
 
     $storageAccount.sku = [PsArmStorageSku]::New()
     $storageAccount.sku.tier = $Tier
@@ -1030,7 +1058,10 @@ Function New-PsArmVmConfig
         [string] $VmSize,
 
         [parameter(Mandatory=$False)]
-        [string] $Location = '[resourceGroup().location]',
+        [string] $Location,
+
+        [parameter(Mandatory=$False)]
+        [hashtable] $tags,
 
         [parameter(Mandatory=$False)]
         [string] $AvailabilitySetId
@@ -1040,7 +1071,15 @@ Function New-PsArmVmConfig
 
     $vm = [PsArmVm]::New()
     $vm.name = $VmName
-    $vm.location = $Location
+
+    if ($Location) {
+        $vm.location = $Location
+    }
+
+    if ($tags) {
+        $vm.tags = $tags
+    }
+
     $vm.properties = [PsArmVmProperties]::New()
 
     # hardwareProfile
@@ -1326,6 +1365,9 @@ Function New-PsArmVnet
         [parameter(Mandatory=$False)]
         [string] $Location,
 
+        [parameter(Mandatory=$False)]
+        [hashtable] $tags,
+
         [parameter(Mandatory=$True)]
         [array] $AddressPrefixes
 
@@ -1338,6 +1380,10 @@ Function New-PsArmVnet
 
     if ($Location) {
         $vnet.Location = $Location
+    }
+
+    if ($tags) {
+        $vnet.tags = $tags
     }
 
     $vnet.properties = [PsArmVnetProperties]::New()
@@ -1517,6 +1563,12 @@ Function New-PsArmVnetGateway
         [parameter(Mandatory=$True)]
         [string] $Name,
 
+        [parameter(Mandatory=$False)]
+        [string] $Location,
+
+        [parameter(Mandatory=$False)]
+        [hashtable] $tags,
+
         [parameter(Mandatory=$True)]
         [string] $VnetName,
 
@@ -1558,6 +1610,15 @@ Function New-PsArmVnetGateway
 
     $gateway = [PsArmVnetGateway]::New()
     $gateway.name = $Name
+
+    if ($Location) {
+        $gateway.location = $Location    
+    }
+
+    if ($tags) {
+        $gateway.tags = $tags
+    }
+
     $gateway.dependsOn += "[resourceId('Microsoft.Network/virtualNetworks', '$vnetName')]"
     $gateway.properties = [PsArmVnetGatewayProperties]::New()
     $gateway.properties.ipConfigurations += $ipConfig
@@ -1582,7 +1643,10 @@ Function New-PsArmLocalNetworkGateway
         [string] $Name,
 
         [parameter(Mandatory=$False, Position=2, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [string] $Location = '[resourceGroup().location]',
+        [string] $Location,
+
+        [parameter(Mandatory=$False)]
+        [hashtable] $tags,
 
         [parameter(Mandatory=$True, Position=3, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $GatewayIpAddress,
@@ -1595,7 +1659,15 @@ Function New-PsArmLocalNetworkGateway
 
     $localNetworkGateway = [PsArmLocalNetworkGateway]::New()
     $localNetworkGateway.Name = $Name
-    $localNetworkGateway.location = $Location
+
+    if ($Location) {
+        $localNetworkGateway.location = $Location
+    }
+
+    if ($tags) {
+        $localNetworkGateway.tags = $tags
+    }
+
     $localNetworkGateway.properties = [PsArmLocalNetworkGatewayProperties]::New()
     $localNetworkGateway.properties.localNetworkAddressSpace = [PsArmLocalNetworkAddressSpace]::New()
     $localNetworkGateway.properties.localNetworkAddressSpace.AddressPrefixes = $addressPrefix
@@ -1614,7 +1686,10 @@ Function New-PsArmVirtualNetworkPeering
         [string] $Name,
 
         [parameter(Mandatory=$False, Position=1, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [string] $Location = '[resourceGroup().location]',
+        [string] $Location,
+
+        [parameter(Mandatory=$False)]
+        [hashtable] $tags,
 
         [parameter(Mandatory=$False, Position=2, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $Vnet1Name,
@@ -1640,6 +1715,15 @@ Function New-PsArmVirtualNetworkPeering
 
     $vnetPeer = [PsArmVirtualNetworkPeering]::New()
     $vnetPeer.Name = $($Vnet1Name) + '/' + $($Name)
+
+    if ($Location) {
+        $vnetPeer.location = $Location
+    }
+
+    if ($tags) {
+        $vnetPeer.tags = $tags
+    }
+
     $vnetPeer.properties = [PsArmVirtualNetworkPeeringProperties]::New()
     $vnetPeer.properties.allowVirtualNetworkAccess = $allowVirtualNetworkAccess
     $vnetPeer.properties.allowForwardedTraffic = $allowForwardedTraffic
@@ -1662,7 +1746,10 @@ Function New-PsArmVirtualNetworkGatewayConnection
         [string] $Name,
 
         [parameter(Mandatory=$False, Position=2, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [string] $Location = '[resourceGroup().location]',
+        [string] $Location,
+
+        [parameter(Mandatory=$False)]
+        [hashtable] $tags,
 
         [parameter(Mandatory=$True, Position=3, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $virtualNetworkGateway1Id,
@@ -1687,6 +1774,15 @@ Function New-PsArmVirtualNetworkGatewayConnection
 
     $connection = [PsArmConnection]::New()
     $connection.Name = $Name
+
+    if ($Location) {
+        $connection.location = $Location
+    }
+
+    if ($tags) {
+        $connection.tags = $tags
+    }
+
     $connection.properties = [PsArmConnectionProperties]::New()
     $connection.properties.virtualNetworkGateway1 = New-PsArmId -ResourceId $virtualNetworkGateway1Id
     # $connection.dependsOn += $virtualNetworkGateway1Id
@@ -1789,11 +1885,25 @@ Function New-PsArmLoadBalancer
 
     Param (
         [parameter(Mandatory=$True)]
-        [string] $Name
+        [string] $Name,
+
+        [parameter(Mandatory=$False)]
+        [string] $Location,
+
+        [parameter(Mandatory=$False)]
+        [hashtable] $tags
     )
 
     $loadBalancer = [PsArmLoadBalancer]::New()
     $loadBalancer.name = $Name
+
+    if ($Location) {
+        $loadBalancer.location = $Location        
+    }
+
+    if ($tags) {
+        $loadBalancer.tags = $tags
+    }
 
     return $loadBalancer
 }
@@ -1997,6 +2107,9 @@ Function New-PsArmQuickVm
         [string] $StorageAccountName,
 
         [parameter(Mandatory=$False)]
+        [hashtable] $tags = @{"deploytype" = "PsArmQuickVM"},
+
+        [parameter(Mandatory=$False)]
         [string] $VhdImageName,
 
         [Parameter(Mandatory=$False)]
@@ -2126,7 +2239,7 @@ Function New-PsArmQuickVm
         $pipName = $vmName + "Pip0"
         $domainNameLabel = $VmName.ToLower()
 
-        $resources += New-PsArmPublicIpAddress -Name $pipName -Location $location -DomainNameLabel $domainNameLabel
+        $resources += New-PsArmPublicIpAddress -Name $pipName -Location $location -DomainNameLabel $domainNameLabel -tags $tags
     }
 
 
@@ -2144,7 +2257,7 @@ Function New-PsArmQuickVm
 
 
     # Create the VM
-    $vm = New-PsArmVmConfig -VmName $VmName -VmSize $VmSize
+    $vm = New-PsArmVmConfig -VmName $VmName -VmSize $VmSize -tags $tags
     $vm = $vm | Set-PsArmVmOperatingSystem -ComputerName $VmName -AdminUserName $AdminUserName -AdminPassword $AdminPassword -ProvisionVmAgent
 
     if ($Publisher) {
@@ -2199,7 +2312,7 @@ Function New-PsArmQuickVm
 
         # create the Nic
         $nicName = $vmName + "Nic" + $i.ToString()
-        $nic = New-PsArmNetworkInterface -Name $nicName -Location $location -SubnetId $thisSubnetId -PrivateIpAddress $thisIpAddress -PublicIpAddressId $publicIpAddressId -NetworkSecurityGroupId $thisNsgId
+        $nic = New-PsArmNetworkInterface -Name $nicName -Location $location -SubnetId $thisSubnetId -PrivateIpAddress $thisIpAddress -PublicIpAddressId $publicIpAddressId -NetworkSecurityGroupId $thisNsgId -tags $tags
 
         # add Nic to the resource
         $resources += $nic
