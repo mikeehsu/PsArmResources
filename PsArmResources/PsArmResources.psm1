@@ -963,7 +963,7 @@ Function New-PsArmStorageAccount
         [string] $Tier = 'Standard',
 
         [parameter(Mandatory=$False)]
-        [ValidateSet('LRS','GRS','RA-GRS','ZRS')]
+        [ValidateSet('LRS','GRS','RAGRS','ZRS')]
         [string] $Replication = 'LRS'
     )
 
