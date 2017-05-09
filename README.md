@@ -28,6 +28,31 @@ New-AzureRmResourceGroupDeployment -Name $DeploymentName -ResourceGroupName $Res
 
 > **Note**: For more examples see the ./examples directory
 
+
+## Prerequisites and Installation
+
+Requires Powershell `AzureRM` module.
+
+Install:  Clone this repo, then add repository path to `$env:PSModulePath` with:
+
+```ps1
+$env:PSMODULEPATH += ";$HOME/path/to/PsArmResources"
+Import-Module PsArmResources
+```
+
+Then testing with `New-PsArmTemplate` should look like this:
+```
+PS> \Projects\PsArmResources\examples> New-PsArmTemplate | ConvertTo-Json
+{
+    "schema":  "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "resources":  [
+
+                  ]
+}
+```
+
+
 ## Public domain
 
 This project is in the worldwide [public domain](LICENSE.md). As stated in [CONTRIBUTING](CONTRIBUTING.md):
