@@ -52,6 +52,9 @@ Class PsArmStorageAccount {
     [hashtable] $tags
     [PsArmStorageSku] $sku
     [string] $kind = 'Storage'
+    [string] Id() {
+        return "[resourceId('{0}', '{1}')]"  -f $this.type,$this.name
+    }
 }
 
 # Security Group
@@ -111,6 +114,9 @@ Class PsArmPublicIpAddress {
     [PsArmPublicIpAddressProperties] $properties
     [array] $resources = @()
     [array] $dependsOn = @()
+    [string] Id() {
+       return "[resourceId('{0}', '{1}')]"  -f $this.type,$this.name
+    }
 }
 
 # Network Interface Classes
@@ -136,6 +142,9 @@ Class PsArmNetworkInterface {
     [hashtable] $tags
     [array] $resources = @()
     [array] $dependsOn = @()
+    [string] Id() {
+       return "[resourceId('{0}', '{1}')]"  -f $this.type,$this.name
+    }
 }
 
 
@@ -401,6 +410,13 @@ Class PsArmVnet {
     [string] $comments
     [array] $dependsOn
     [PsArmVnetProperties] $properties
+    [string] SubnetId([string] $SubnetName) {
+       return "[concat(resourceId('{0}', '{1}'), '/subnets/{2}')]" -f $this.type,$this.name,$SubnetName
+    }
+    [string] Id() {
+       return "[resourceId('{0}', '{1}')]"  -f $this.type,$this.name
+    }
+
 }
 
 # virtual Network Gateways

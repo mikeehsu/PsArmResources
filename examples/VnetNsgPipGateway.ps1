@@ -1,7 +1,7 @@
 Import-Module "PsArmResources" -Force
 
 $ResourceGroupName = 'MyVnet'
-$deploymentName = $resourceGroupName + $(get-date -f yyyyMMddHHMMss)
+$deploymentName = $resourceGroupName + $(get-date -f yyyyMMddHHmmss)
 $deploymentFile = $env:TEMP + '\'+ $deploymentName + '.json'
 
 $template = New-PsArmTemplate
