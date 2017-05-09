@@ -185,27 +185,6 @@ Function Assert-PsArmRouteTable {
 # 4. VNetPeering is weird, they are modelled not as properties of a Vnet, but as resources associated with a Vnet.
 #    See https://github.com/Azure/azure-quickstart-templates/blob/master/201-vnet-to-vnet-peering/azuredeploy.json#L44-L65
 
-
-Function Get-ActualResourceGroup([string] $ResourceGroupName) {
-    $DeploymentName = $ResourceGroupName + $(get-date -f yyyyMMddHHmmss)
-    $actualFile = $env:TEMP + '\actual-'+ $deploymentName + '.json'
-    Write-Verbose "Saving actual Azure state to $actualFile"
-    $result = Export-AzureRmResourceGroup -ResourceGroupName $ResourceGroupName -IncludeParameterDefaultValue -Path $actualFile
-    Get-Content $actualFile | ConvertFrom-Json
-}
-
-Function Get-PsArmPesterDesiredResourceGroup([string] $ResourceGroupName, [string] $DeployScript) {
-    if (Test-Path $DeployScript) {
-        $DeploymentName = $ResourceGroupName + $(get-date -f yyyyMMddHHmmss)
-        $desiredFile = $env:TEMP + '\desired-'+ $deploymentName + '.json'
-        Write-Verbose "Save desired Azure state from $DeployScript to $desiredFile"
-        Invoke-Expression "$DeployScript -Path $desiredFile"
-        Get-Content $desiredFile | ConvertFrom-Json
-    } else {
-        Write-Error "Can't find path $DeployScript"
-    }
-}
-
 Function Get-PsArmPesterResourceGroup {
     [CmdletBinding()]
     Param(
