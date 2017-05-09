@@ -31,7 +31,7 @@ Function Assert-PsArmGroupSummary {
             $Objects =  @($target.resources | where {$_.type -Eq $Resource})
             $Objects.length | Should be $Expected
         }
-    } 
+    }
 }
 
 Function Assert-PsArmVM {
@@ -48,7 +48,7 @@ Function Assert-PsArmVM {
         It "desired should include VM named <Name> and sized <VmSize>" -TestCases $TestCases {
             param($Name, $VmSize)
             $normalizedName = $Name.Replace('-','_')
-            $VM = $VMs | 
+            $VM = $VMs |
                 where {$_.name -Match $Name -or $_.name -Match $normalizedName }
             $VM.properties.hardwareProfile.vmSize | Should be $VmSize
         }
@@ -78,7 +78,7 @@ Function Assert-PsArmStorage {
 
         It "should use replication <Replication>" -TestCases $TestCases {
             param($Name, $Replication)
-            $StorageAccounts = 
+            $StorageAccounts =
                 $target.resources | where {$_.type -Match 'storageAccounts'}
             $StorageAccount = $StorageAccounts | where {$_.name -Match $Name}
             $StorageAccount.sku.name | Should Match $Replication
@@ -96,7 +96,7 @@ Function Assert-PsArmNetworkSecurityGroup {
         [System.Object] $TestCases
     )
     Context "NetworkSecurityGroup" {
-        $NSGs = @($target.resources | 
+        $NSGs = @($target.resources |
             where {$_.type -Eq 'Microsoft.Network/networkSecurityGroups'})
         It  "should include networkSecurityGroup <Name>" -TestCases $TestCases {
             param($Name)
@@ -105,7 +105,7 @@ Function Assert-PsArmNetworkSecurityGroup {
 
         It  "networkSecurityGroup <Name> should have <SecurityRuleCount> rules" -TestCases $TestCases {
             param($Name,$SecurityRuleCount)
-            $NSG = $NSGs | where {$_.name -Match $Name} 
+            $NSG = $NSGs | where {$_.name -Match $Name}
             $NSG.properties.securityRules.count | Should Be $SecurityRuleCount
         }
     }
@@ -121,7 +121,7 @@ Function Assert-PsArmVNet {
         [System.Object] $TestCases
     )
     Context "VNet" {
-        $VNets = @($target.resources | 
+        $VNets = @($target.resources |
             where {$_.type -Eq 'Microsoft.Network/virtualNetworks'})
         It  "should include vNet <Name>" -TestCases $TestCases {
             param($Name)
@@ -152,7 +152,7 @@ Function Assert-PsArmRouteTable {
         [System.Object] $TestCases
     )
     Context "RouteTables" {
-        $RouteTables = @($target.resources | 
+        $RouteTables = @($target.resources |
             where {$_.type -Eq 'Microsoft.Network/routeTables'})
         It  "should include routeTable <Name>" -TestCases $TestCases {
             param($Name)
@@ -190,7 +190,7 @@ Function Get-PsArmPesterResourceGroup {
     Param(
         [parameter(Mandatory=$True,ParameterSetName = "Desired")]
         [switch] $Desired,
-        
+
         [parameter(Mandatory=$True,ParameterSetName = "Actual")]
         [switch] $Actual,
 
