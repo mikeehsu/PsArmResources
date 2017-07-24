@@ -2256,9 +2256,12 @@ Function New-PsArmQuickVm
             throw 1
         }
 
+    } elseif ($attachOsDisk) {
+        # nothing to verify
+
     } else {
         Write-Error "Custom image currently not supported"
-        return
+        throw 1
 
         # # custom image
         # if (-not $vhdImageName.EndsWith('.vhd')) {
