@@ -3,10 +3,10 @@
 #
 # Written in 2016 by Mike Hsu
 #
-# To the extent possible under law, the author(s) have dedicated all copyright 
+# To the extent possible under law, the author(s) have dedicated all copyright
 # and related and neighboring rights to this software to the public domain worldwide.
 # This software is distributed without any warranty.
-# 
+#
 # You should have received a copy of the CC0 Public Domain Dedication along with
 # this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 #
@@ -315,7 +315,7 @@ Class PsArmVmStorageOsDisk {
 
 Class PsArmVmStorageDataDisk {
     [string] $name
-    [int] $diskSizeGB
+    [string] $diskSizeGB  # must be string to enable setting to $null
     [int] $lun
     [string] $createOption = ''
     [PsArmVmStorageUri] $image
@@ -972,7 +972,7 @@ Function New-PsArmRouteTable
     if ($Location) {
        $routeTable.location = $Location
     }
-    
+
     if ($tags) {
         $routeTable.tags = $tags
     }
@@ -1213,7 +1213,7 @@ Function Add-PsArmVmDataDisk
         [string] $VhdUri,
 
         [parameter(Mandatory=$False, Position=4, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [string] $Caching = 'ReadWrite',
+        [string] $Caching = 'ReadOnly',
 
         [parameter(Mandatory=$True, Position=6, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [int] $Lun,
@@ -1221,7 +1221,7 @@ Function Add-PsArmVmDataDisk
         [parameter(Mandatory=$False, Position=7, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $CreateOption = 'Empty',
 
-        [parameter(Mandatory=$True, Position=5, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [parameter(Mandatory=$False, Position=5, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [int] $DiskSizeInGB,
 
         [parameter(Mandatory=$False, Position=8, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
@@ -1231,12 +1231,29 @@ Function Add-PsArmVmDataDisk
 
     Write-Verbose "Scripting data disk $VhdUri"
 
+    if ([string]::IsNullOrEmpty($DiskSizeInGB)) {
+        $DiskSizeInGB = $null
+    }
+
+    if ($CreateOption -eq 'Empty') {
+        if (-not $DiskSizeInGB) {
+            Write-Error 'DiskSizeInGB is required for empty disks.'
+            return
+        }
+    }
+
     $dataDisk = [PsArmVmStorageDataDisk]::New()
     $dataDisk.name = $Name
-    $dataDisk.diskSizeGB = $DiskSizeInGB
     $dataDisk.caching = $Caching
     $dataDisk.lun = $Lun
     $dataDisk.createOption = $CreateOption
+
+    if ($CreateOption -eq 'Attach') {
+        $dataDisk.diskSizeGB = $null
+    } else {
+        $dataDisk.diskSizeGB = $DiskSizeInGB
+    }
+
     $dataDisk.vhd = [PsArmVmStorageUri]::New()
     $dataDisk.vhd.uri = $VhdUri
 
@@ -1277,7 +1294,7 @@ Function Set-PsArmVmOsDisk
         [parameter(Mandatory=$True, Position=2, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $Name,
 
-        [parameter(Mandatory=$True, Position=3, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [parameter(Mandatory=$False, Position=3, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $VhdUri,
 
         [parameter(Mandatory=$False, Position=4, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
@@ -1286,8 +1303,8 @@ Function Set-PsArmVmOsDisk
         [parameter(Mandatory=$False, Position=5, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [string] $SourceImageUri,
 
-        [parameter(Mandatory=$True, Position=6, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [string] $CreateOption = 'FromImage',
+        [parameter(Mandatory=$True, Position=7, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$False)]
+        [string] $CreateOption,
 
         # [parameter(Mandatory=$False, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         # [int] $DiskSizeInGB,
@@ -1301,7 +1318,11 @@ Function Set-PsArmVmOsDisk
 
     Write-Verbose "Scripting OS disk $VhdUri from $SourceImageUri"
 
-    # onlyl set the osType if copying from an image
+    if ([string]::IsNullOrEmpty($CreateOption)) {
+        $CreateOption = 'FromImage'
+    }
+
+    # only set the osType if copying from an image
     $osType = 'Windows'
     if ($Linux) {
         $osType = 'Linux'
@@ -1312,8 +1333,13 @@ Function Set-PsArmVmOsDisk
     }
 
     $VM.properties.storageProfile.osDisk = [PsArmVmStorageOsDisk]::New()
+    $VM.properties.storageProfile.osDisk.osType = $osType
 
-    if ($SourceImageUri) {
+    if ($CreateOption -eq 'Attach') {
+        # $VM.properties.storageProfile.osDisk.image = [PsArmVmStorageUri]::New()
+        # $VM.properties.storageProfile.osDisk.image.uri = $VhdUri
+
+    } elseif ($SourceImageUri) {
         $VM.properties.storageProfile.osDisk.osType = $osType
         $VM.properties.storageProfile.osDisk.image = [PsArmVmStorageUri]::New()
         $VM.properties.storageProfile.osDisk.image.uri = $SourceImageUri
@@ -1628,7 +1654,7 @@ Function New-PsArmVnetGateway
     $gateway.name = $Name
 
     if ($Location) {
-        $gateway.location = $Location    
+        $gateway.location = $Location
     }
 
     if ($tags) {
@@ -1869,8 +1895,8 @@ Function New-PsArmVmCustomScriptExtension
     )
 
     $uriParts = $CustomExtensionUri.Split('/')
-    $uriStorageAccountName = $uriParts[2].Split('.')[0]
-    $uriContainer = $uriParts[3]
+    # $uriStorageAccountName = $uriParts[2].Split('.')[0]
+    # $uriContainer = $uriParts[3]
     $uriBlobName = $uriParts[4..$($uriParts.Count-1)] -Join '/'
 
     if (-not $Run) {
@@ -1914,7 +1940,7 @@ Function New-PsArmLoadBalancer
     $loadBalancer.name = $Name
 
     if ($Location) {
-        $loadBalancer.location = $Location        
+        $loadBalancer.location = $Location
     }
 
     if ($tags) {
@@ -2116,10 +2142,10 @@ Function New-PsArmQuickVm
         [parameter(Mandatory=$True)]
         [string] $VmSize,
 
-        [parameter(Mandatory=$True)]
+        [parameter(Mandatory=$False)]
         [string] $StorageAccountResourceGroupName,
 
-        [parameter(Mandatory=$True)]
+        [parameter(Mandatory=$False)]
         [string] $StorageAccountName,
 
         [parameter(Mandatory=$False)]
@@ -2129,13 +2155,19 @@ Function New-PsArmQuickVm
         [string] $VhdImageName,
 
         [Parameter(Mandatory=$False)]
-        [string] $osDiskName = "$($VmName)_OsDisk",
+        [string] $osDiskName,
+
+        [Parameter(Mandatory=$False)]
+        [string] $OsDiskUri,
 
         [Parameter(Mandatory=$False)]
         [array] $DataDiskStorageAccountName,
 
         [Parameter(Mandatory=$False)]
         [array] $DataDiskSize,
+
+        [Parameter(Mandatory=$False)]
+        [array] $DataDiskUri,
 
         [Parameter(Mandatory=$False)]
         [array] $StaticIPAddress,
@@ -2183,9 +2215,21 @@ Function New-PsArmQuickVm
 
     Write-Verbose "Scripting QuickVM $VmName"
 
+    # set default values
+    if ([string]::IsNullOrEmpty($osDiskName)) {
+        $osDiskName = "$($VmName)_OsDisk"
+    }
+
+    $attachOsDisk = $True
+    if ([string]::IsNullOrEmpty($OsDiskUri)) {
+        $osDiskUri = $null
+        $attachOSDisk = $False
+    }
+
     # get location from vNet
-    $vNet = Get-AzureRmVirtualNetwork -ResourceGroupName $VNetName -Name $VNetName
-    if (-not $vNet) {
+    $vnet = @()
+    $vNet +=  Get-AzureRmVirtualNetwork | Where-Object {$_.Name -eq $VNetName}
+    if (-not $vNet -or $vNet.Count -ne 1) {
         throw "Invalid VNetName $VnetName"
     }
     $location = $vNet.Location
@@ -2194,16 +2238,20 @@ Function New-PsArmQuickVm
     # $imageStorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $global:AzureStorageResourceGroupName -Name $global:AzureStorageAccountName -ErrorAction "Stop"
 
     # verify storage & vnet locations
-    $storageAccount = Get-AzureRmStorageAccount -ResourceGroupName $StorageAccountResourceGroupName -Name $StorageAccountName -ErrorAction "Stop"
-    if ($vNet.Location -ne $storageAccount.Location) {
-        Write-Error "VirtualNetwork location and StorageAccount location do not match"
-        return
+    if (-not $attachOsDisk) {
+        $storageAccount = Get-AzureRmStorageAccount -ResourceGroupName $StorageAccountResourceGroupName -Name $StorageAccountName -ErrorAction "Stop"
+        if ($vNet.Location -ne $storageAccount.Location) {
+            Write-Error "VirtualNetwork location and StorageAccount location do not match"
+            return
+        }
+
+        $osDiskUri = '{0}vmdisks/{1}_osdisk.vhd' -f $storageAccount.PrimaryEndpoints.Blob.ToString(), $vmName
     }
 
     # verify image info
     if ($Publisher) {
         # marketplace
-        if ((-not $PlanName) -or (-not $Product) -or (-not $Offer) -or (-not $Sku)) {
+        if ((-not $Offer) -or (-not $Sku)) {
             Write-Error 'PlanName, Product, Offer and Sku required when Publisher provided.'
             throw 1
         }
@@ -2268,25 +2316,35 @@ Function New-PsArmQuickVm
     #     $AdminPassword = $(Get-AzureKeyVaultSecret -VaultName "$global:AzureKeyVaultName" -Name "password" -ErrorAction "Stop").SecretValueText
     # }
 
-    # storageProfile
-    $osDiskUri = '{0}vmdisks/{1}_osdisk.vhd' -f $storageAccount.PrimaryEndpoints.Blob.ToString(), $vmName
-
-
     # Create the VM
     $vm = New-PsArmVmConfig -VmName $VmName -VmSize $VmSize -tags $tags
-    $vm = $vm | Set-PsArmVmOperatingSystem -ComputerName $VmName -AdminUserName $AdminUserName -AdminPassword $AdminPassword -ProvisionVmAgent
 
+    if (-not $attachOsDisk) {
+        $vm = $vm | Set-PsArmVmOperatingSystem -ComputerName $VmName -AdminUserName $AdminUserName -AdminPassword $AdminPassword -ProvisionVmAgent
+    }
+
+    # storageProfile
     if ($Publisher) {
-        $vm.plan = [PsArmVmPlan]::New()
-        $vm.plan.name = $Sku
-        $vm.plan.product = $Product
-        $vm.plan.publisher = $Publisher
+        # creating a VM from marketplace
+
+        # $vm.plan = [PsArmVmPlan]::New()
+        # $vm.plan.name = $Sku
+        # $vm.plan.product = $Product
+        # $vm.plan.publisher = $Publisher
 
         $vm = Set-PsArmVmSourceImage -VM $vm -Publisher $Publisher -Offer $Offer -Sku $Sku -Version 'latest'
         $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -CreateOption 'FromImage'
+
     } else {
-        $sourceImageUri = $($storageAccount.PrimaryEndpoints.Blob.ToString()) + "vhdimages/" + $vhdImageName
-        $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -SourceImageUri $sourceImageUri -CreateOption 'FromImage'
+        if ($attachOsDisk) {
+            $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -CreateOption 'Attach'
+
+        } else {
+
+            $sourceImageUri = $($storageAccount.PrimaryEndpoints.Blob.ToString()) + "vhdimages/" + $vhdImageName
+            $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -SourceImageUri $sourceImageUri -CreateOption 'FromImage'
+
+        }
     }
 
     # create one or more Nics
@@ -2340,37 +2398,52 @@ Function New-PsArmQuickVm
     }
 
     # Specify the data disk
-    if ($DataDiskSize) {
-        for ($i=0; $i -lt $DataDiskSize.Count; $i++) {
-            $dataVhdStorageAccountName = $DataDiskStorageAccountName[$i]
-            $dataVhdDiskSize = $DataDiskSize[$i]
+    if ($DataDiskUri) {
+        $i = 0
+        foreach ($diskUri in $DataDiskUri) {
+            $i = $i + 1
             $dataDiskName = "$($VmName)_dataDisk_$($i)"
 
-            if (-not $dataVhdStorageAccountName) {
-                $dataVhdStorageAccountName = $StorageAccountName
-            }
-
-            $dataVhdResource = Find-AzureRmResource -ResourceName $dataVhdStorageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
-
-            if ($dataVhdResource) {
-                $dataVhdStorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $($dataVhdResource.ResourceGroupName) -Name $dataVhdStorageAccountName -ErrorAction "Stop"
-                $endpoint = $dataVhdStorageAccount.PrimaryEndPoints.Blob.ToString()
-            } else {
-                Write-Error "$dataVhdStorageAccountName StorageAccount does not exist, please create and try again."
-                return
-                # storage not found, assume the storage must be created as part of the template
-                # $parts = $storageAccountName.PrimaryEndPoint.Blob.Split('./')
-                # $endpoint = $parts[0] + '//' +  $dataVhdStorageAccountName + '.' + $($parts[3..6] -join '.') + '/'
-
-                # $vm = Add-PsArmVmDependsOn -VM $vm -Id "[resourceId('Microsoft.Storage/storageAccounts', '$dataVhdStorageAccountName')]"
-            }
-            $dataDiskVhdUri = '{0}vmdisks/{1}_datadisk_{2}.vhd' -f $endpoint, $vmName, $i
-
             $vm = Add-PsArmVmDataDisk -Vm $vm -Name $dataDiskName `
-                    -VhdUri $dataDiskVhdUri `
-                    -Lun $i `
-                    -CreateOption 'Empty' `
-                    -DiskSizeInGB $dataVhdDiskSize
+                -VhdUri $diskUri `
+                -CreateOption 'Attach' `
+                -Lun $i
+        }
+
+    } else {
+
+        if ($DataDiskSize) {
+            for ($i=0; $i -lt $DataDiskSize.Count; $i++) {
+                $dataVhdStorageAccountName = $DataDiskStorageAccountName[$i]
+                $dataVhdDiskSize = $DataDiskSize[$i]
+                $dataDiskName = "$($VmName)_dataDisk_$($i)"
+
+                if (-not $dataVhdStorageAccountName) {
+                    $dataVhdStorageAccountName = $StorageAccountName
+                }
+
+                $dataVhdResource = Find-AzureRmResource -ResourceName $dataVhdStorageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
+
+                if ($dataVhdResource) {
+                    $dataVhdStorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $($dataVhdResource.ResourceGroupName) -Name $dataVhdStorageAccountName -ErrorAction "Stop"
+                    $endpoint = $dataVhdStorageAccount.PrimaryEndPoints.Blob.ToString()
+                } else {
+                    Write-Error "$dataVhdStorageAccountName StorageAccount does not exist, please create and try again."
+                    return
+                    # storage not found, assume the storage must be created as part of the template
+                    # $parts = $storageAccountName.PrimaryEndPoint.Blob.Split('./')
+                    # $endpoint = $parts[0] + '//' +  $dataVhdStorageAccountName + '.' + $($parts[3..6] -join '.') + '/'
+
+                    # $vm = Add-PsArmVmDependsOn -VM $vm -Id "[resourceId('Microsoft.Storage/storageAccounts', '$dataVhdStorageAccountName')]"
+                }
+                $dataDiskVhdUri = '{0}vmdisks/{1}_datadisk_{2}.vhd' -f $endpoint, $vmName, $i
+
+                $vm = Add-PsArmVmDataDisk -Vm $vm -Name $dataDiskName `
+                        -VhdUri $dataDiskVhdUri `
+                        -Lun $i `
+                        -CreateOption 'Empty' `
+                        -DiskSizeInGB $dataVhdDiskSize
+            }
         }
     }
 
@@ -2391,8 +2464,8 @@ Function New-PsArmQuickVm
     if ($CustomExtensionUri) {
         $uriParts = $CustomExtensionUri.Split('/')
         $uriStorageAccountName = $uriParts[2].Split('.')[0]
-        $uriContainer = $uriParts[3]
-        $uriBlobName = $uriParts[4..$($uriParts.Count-1)] -Join '/'
+        # $uriContainer = $uriParts[3]
+        # $uriBlobName = $uriParts[4..$($uriParts.Count-1)] -Join '/'
 
         $storage = Get-AzureRmResource | Where-object {$_.Name -eq $uriStorageAccountName -and $_.ResourceType -eq 'Microsoft.Storage/storageAccounts'}
         if (-not $storage) {
