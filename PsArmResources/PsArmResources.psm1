@@ -2335,8 +2335,14 @@ Function New-PsArmQuickVm
         # $vm.plan.product = $Product
         # $vm.plan.publisher = $Publisher
 
+        if ($osType -eq "Linux") {
+            $osTypeParam = @{Linux = $True}
+        } else {
+            $osTypeParam = @{Windows = $True}
+        }
+
         $vm = Set-PsArmVmSourceImage -VM $vm -Publisher $Publisher -Offer $Offer -Sku $Sku -Version 'latest'
-        $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -CreateOption 'FromImage'
+        $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -CreateOption 'FromImage' @osTypeParam
 
     } else {
         if ($attachOsDisk) {
