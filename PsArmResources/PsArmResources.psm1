@@ -305,11 +305,11 @@ Class PsArmVmStorageImageReference {
 }
 
 Class PsArmVmStorageOsDisk {
-    [string] $name
+    [string] $name = $null
     [string] $createOption
     [string] $osType
     [PsArmVmStorageUri] $image
-    [PsArmVmStorageUri] $vhd
+    [PsArmVmStorageUri] $vhd = $null
     [string] $caching
 }
 
@@ -325,7 +325,7 @@ Class PsArmVmStorageDataDisk {
 
 Class PsArmVmStorageProfile {
     [PsArmVmStorageImageReference] $imageReference
-    [PsArmVmStorageOsDisk] $osDisk
+    [PSCustomObject] $osDisk
     [array] $dataDisks = @()
 }
 
@@ -370,7 +370,7 @@ Class PsArmVm {
     [string] $comments = ""
     [string] $type = 'Microsoft.Compute/virtualMachines'
     [string] $name
-    [string] $apiVersion = '2015-06-15'
+    [string] $apiVersion = '2017-03-30'
     [string] $location = '[resourceGroup().location]'
     [hashtable] $tags
     [PsArmVmPlan] $plan
@@ -1291,11 +1291,11 @@ Function Set-PsArmVmOsDisk
         [parameter(Mandatory=$True, Position=0, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [PsArmVm] $VM,
 
-        [parameter(Mandatory=$True, Position=2, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [string] $Name,
+        [parameter(Mandatory=$False, Position=2, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
+        [string] $Name = $null,
 
         [parameter(Mandatory=$False, Position=3, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
-        [string] $VhdUri,
+        [string] $VhdUri = $null,
 
         [parameter(Mandatory=$False, Position=4, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [String] $Caching = 'ReadWrite',
@@ -1309,6 +1309,9 @@ Function Set-PsArmVmOsDisk
         # [parameter(Mandatory=$False, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         # [int] $DiskSizeInGB,
 
+        [parameter(Mandatory=$False, ValueFromPipelineByPropertyName=$True)]
+        [bool] $ManagedDisk = $false,
+
         [parameter(Mandatory=$False, ValueFromPipeline=$True, ValueFromPipelineByPropertyName=$True)]
         [switch] $Windows,
 
@@ -1316,7 +1319,11 @@ Function Set-PsArmVmOsDisk
         [switch] $Linux
     )
 
-    Write-Verbose "Scripting OS disk $VhdUri from $SourceImageUri"
+    if ($ManagedDisk) {
+        Write-Verbose "Scripting OS disk $VhdUri from $SourceImageUri"
+    } else {
+        Write-Verbose "Scripting Managed Disk from $SourceImageUri"
+    }
 
     if ([string]::IsNullOrEmpty($CreateOption)) {
         $CreateOption = 'FromImage'
@@ -1332,25 +1339,37 @@ Function Set-PsArmVmOsDisk
         $VM.properties.storageProfile = [PsArmVmStorageProfile]::New()
     }
 
-    $VM.properties.storageProfile.osDisk = [PsArmVmStorageOsDisk]::New()
-    $VM.properties.storageProfile.osDisk.osType = $osType
+    $osDisk = @{}
 
-    if ($CreateOption -eq 'Attach') {
-        # $VM.properties.storageProfile.osDisk.image = [PsArmVmStorageUri]::New()
-        # $VM.properties.storageProfile.osDisk.image.uri = $VhdUri
-
-    } elseif ($SourceImageUri) {
-        $VM.properties.storageProfile.osDisk.osType = $osType
-        $VM.properties.storageProfile.osDisk.image = [PsArmVmStorageUri]::New()
-        $VM.properties.storageProfile.osDisk.image.uri = $SourceImageUri
+    # OS disk properties for storage account disks
+    if (-not $ManagedDisk) {
+        $osDisk.name = $Name
+        $osDisk.osType = $osType
+        $osDisk.vhd = [PsArmVmStorageUri]::New()
+        $osDisk.vhd.uri = $VhdUri
     }
 
-    $VM.properties.storageProfile.osDisk.name = $Name
-    $VM.properties.storageProfile.osDisk.createOption = $CreateOption
+    # common OS disk properties
+    $osDisk.caching = $Caching
+    $osDisk.createOption = $CreateOption
+    if ($CreateOption -eq 'Attach') {
+        # $osDisk.image = [PsArmVmStorageUri]::New()
+        # $osDisk.image.uri = $VhdUri
 
-    $VM.properties.storageProfile.osDisk.vhd = [PsArmVmStorageUri]::New()
-    $VM.properties.storageProfile.osDisk.vhd.uri = $VhdUri
-    $VM.properties.storageProfile.osDisk.caching = $Caching
+    } elseif ($SourceImageUri) {
+        $osDisk.osType = $osType
+        $osDisk.image = [PsArmVmStorageUri]::New()
+        $osDisk.image.uri = $SourceImageUri
+    }
+
+    if ($ManagedDisk) {
+        # remove all unnecessary properties
+        $osDisk.name = $null
+        $osDisk.osType = $null
+        $osDisk.vhd = $null
+    }
+
+    $VM.properties.storageProfile.osDisk = New-Object -TypeName PSObject -Property $osDisk
 
     return $VM
 }
@@ -2149,10 +2168,13 @@ Function New-PsArmQuickVm
         [string] $StorageAccountName,
 
         [parameter(Mandatory=$False)]
-        [hashtable] $tags = @{"deploytype" = "PsArmQuickVM"},
+        [hashtable] $tags = @{},
 
         [parameter(Mandatory=$False)]
         [string] $VhdImageName,
+
+        [Parameter(Mandatory=$False)]
+        [string] $ManagedDisk,
 
         [Parameter(Mandatory=$False)]
         [string] $osDiskName,
@@ -2215,6 +2237,7 @@ Function New-PsArmQuickVm
 
     Write-Verbose "Scripting QuickVM $VmName"
 
+
     # set default values
     if ([string]::IsNullOrEmpty($osDiskName)) {
         $osDiskName = "$($VmName)_OsDisk"
@@ -2224,6 +2247,18 @@ Function New-PsArmQuickVm
     if ([string]::IsNullOrEmpty($OsDiskUri)) {
         $osDiskUri = $null
         $attachOSDisk = $False
+    }
+
+    # check for conflicting parameters
+    if ($ManagedDisk -and $attachOsDisk) {
+        Write-Error "Cannot specify both ManagedDisk and OSDiskUri."
+        return
+    }
+
+    if ($ManagedDisk -and (-not [string]::IsNullOrEmpty($StorageAccountName))) {
+        Write-Warning "Both ManagedDisk and StorageAccountName specified, StorageAccountName ignored."
+        $StorageAccountResourceGroupName = $null
+        $StorageAccountName = $null
     }
 
     # get location from vNet
@@ -2238,7 +2273,7 @@ Function New-PsArmQuickVm
     # $imageStorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $global:AzureStorageResourceGroupName -Name $global:AzureStorageAccountName -ErrorAction "Stop"
 
     # verify storage & vnet locations
-    if (-not $attachOsDisk) {
+    if (-not $attachOsDisk -and -not $ManagedDisk) {
         $storageAccount = Get-AzureRmStorageAccount -ResourceGroupName $StorageAccountResourceGroupName -Name $StorageAccountName -ErrorAction "Stop"
         if ($vNet.Location -ne $storageAccount.Location) {
             Write-Error "VirtualNetwork location and StorageAccount location do not match"
@@ -2342,7 +2377,11 @@ Function New-PsArmQuickVm
         }
 
         $vm = Set-PsArmVmSourceImage -VM $vm -Publisher $Publisher -Offer $Offer -Sku $Sku -Version 'latest'
-        $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -CreateOption 'FromImage' @osTypeParam
+        if ($ManagedDisk) {
+            $vm = Set-PsArmVmOSDisk -VM $vm -ManagedDisk $true -CreateOption 'FromImage'
+        } else {
+            $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -CreateOption 'FromImage' @osTypeParam
+        }
 
     } else {
         if ($attachOsDisk) {
@@ -2351,8 +2390,12 @@ Function New-PsArmQuickVm
         } else {
 
             $sourceImageUri = $($storageAccount.PrimaryEndpoints.Blob.ToString()) + "vhdimages/" + $vhdImageName
-            $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -SourceImageUri $sourceImageUri -CreateOption 'FromImage'
 
+            if ($ManagedDisk) {
+                $vm = Set-PsArmVmOSDisk -VM $vm -ManagedDisk $true -SourceImageUri $sourceImageUri -CreateOption 'FromImage'
+            } else {
+                $vm = Set-PsArmVmOSDisk -VM $vm -Name $osDiskName -VhdUri $OsDiskUri -SourceImageUri $sourceImageUri -CreateOption 'FromImage'
+            }
         }
     }
 
