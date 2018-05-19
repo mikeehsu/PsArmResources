@@ -62,10 +62,14 @@ Class PsArmStorageAccount {
 Class PsArmNetworkSecurityGroupRuleProperties {
     [string] $description
     [string] $protocol = '*'
-    [string] $sourceAddressPrefix = '*'
-    [string] $sourcePortRange = '*'
-    [string] $destinationAddressPrefix ='*'
-    [string] $destinationPortRange = '*'
+    [string] $sourceAddressPrefix
+    [string] $sourcePortRange
+    [string] $destinationAddressPrefix
+    [string] $destinationPortRange
+    [array] $sourceAddressPrefixes
+    [array] $sourcePortRanges
+    [array] $destinationAddressPrefixes
+    [array] $destinationPortRanges
     [string] $access
     [int] $priority
     [string] $direction
@@ -82,7 +86,7 @@ Class PsArmNetworkSecurityGroupProperties {
 
 Class PsArmNetworkSecurityGroup {
     [string] $type = 'Microsoft.Network/networkSecurityGroups'
-    [string] $apiVersion = '2016-03-30'
+    [string] $apiVersion = '2017-10-01'
     [string] $name
     [string] $location = '[resourceGroup().location]'
     [hashtable] $tags
@@ -711,16 +715,16 @@ Function Add-PsArmNetworkSecurityGroupRule
         [string] $Protocol,
 
         [parameter(Mandatory=$False)]
-        [string] $SourceAddressPrefix = '*',
+        [array] $SourceAddressPrefix = @('*'),
 
         [parameter(Mandatory=$False)]
-        [string] $SourcePortRange = '*',
+        [array] $SourcePortRange = @('*'),
 
         [parameter(Mandatory=$False)]
-        [string] $DestinationAddressPrefix = '*',
+        [array] $DestinationAddressPrefix = @('*'),
 
         [parameter(Mandatory=$False)]
-        [string] $DestinationPortRange = '*'
+        [array] $DestinationPortRange = @('*')
     )
 
     Write-Verbose "Scripting NetworkSecurityGroupRule $Name"
@@ -737,15 +741,35 @@ Function Add-PsArmNetworkSecurityGroupRule
     $rule = [PsArmNetworkSecurityGroupRule]::New()
     $rule.name = $Name
     $rule.properties = [PsArmNetworkSecurityGroupRuleProperties]::New()
-    $rule.properties.description              = $Description
-    $rule.properties.priority                 = $Priority
-    $rule.properties.direction                = $Direction
-    $rule.properties.access                   = $Access
-    $rule.properties.protocol                 = $Protocol
-    $rule.properties.sourceAddressPrefix      = $SourceAddressPrefix
-    $rule.properties.sourcePortRange          = $SourcePortRange
-    $rule.properties.destinationAddressPrefix = $DestinationAddressPrefix
-    $rule.properties.destinationPortRange     = $DestinationPortRange
+    $rule.properties.description = $Description
+    $rule.properties.priority    = $Priority
+    $rule.properties.direction   = $Direction
+    $rule.properties.access      = $Access
+    $rule.properties.protocol    = $Protocol
+
+    if ($SourceAddressPrefix.Length -eq 1) {
+        $rule.properties.sourceAddressPrefix = $SourceAddressPrefix[0]
+    } else {
+        $rule.properties.sourceAddressPrefixes = $SourceAddressPrefix
+    }
+
+    if ($SourcePortRange.Length -eq 1) {
+        $rule.properties.sourcePortRange = $SourcePortRange[0]
+    } else {
+        $rule.properties.sourcePortRanges = $SourcePortRange
+    }
+
+    if ($DestinationAddressPrefix.Length -eq 1) {
+        $rule.properties.destinationAddressPrefix = $DestinationAddressPrefix[0]
+    } else {
+        $rule.properties.destinationAddressPrefixes = $DestinationAddressPrefix
+    }
+
+    if ($DestinationPortRange.Length -eq 1) {
+        $rule.properties.destinationPortRange = $DestinationPortRange[0]
+    } else {
+        $rule.properties.destinationPortRanges = $DestinationPortRange
+    }
 
     $nsg.properties.securityRules += $rule
 
