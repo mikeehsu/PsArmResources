@@ -68,8 +68,10 @@ Class PsArmNetworkSecurityGroupRuleProperties {
     [string] $destinationPortRange
     [array] $sourceAddressPrefixes
     [array] $sourcePortRanges
+    [array] $sourceApplicationSecurityGroups
     [array] $destinationAddressPrefixes
     [array] $destinationPortRanges
+    [array] $destinationApplicationSecurityGroups
     [string] $access
     [int] $priority
     [string] $direction
@@ -715,16 +717,22 @@ Function Add-PsArmNetworkSecurityGroupRule
         [string] $Protocol,
 
         [parameter(Mandatory=$False)]
-        [array] $SourceAddressPrefix = @('*'),
+        [array] $SourceAddressPrefix,
 
         [parameter(Mandatory=$False)]
-        [array] $SourcePortRange = @('*'),
+        [array] $SourcePortRange,
 
         [parameter(Mandatory=$False)]
-        [array] $DestinationAddressPrefix = @('*'),
+        [array] $DestinationAddressPrefix,
 
         [parameter(Mandatory=$False)]
-        [array] $DestinationPortRange = @('*')
+        [array] $DestinationPortRange,
+
+        [parameter(Mandatory=$False)]
+        [array] $SourceApplicationSecurityGroups,
+
+        [parameter(Mandatory=$False)]
+        [array] $DestinationApplicationSecurityGroups
     )
 
     Write-Verbose "Scripting NetworkSecurityGroupRule $Name"
@@ -747,28 +755,49 @@ Function Add-PsArmNetworkSecurityGroupRule
     $rule.properties.access      = $Access
     $rule.properties.protocol    = $Protocol
 
-    if ($SourceAddressPrefix.Length -eq 1) {
+    if ($SourceAddressPrefix.Count -eq 1) {
         $rule.properties.sourceAddressPrefix = $SourceAddressPrefix[0]
     } else {
         $rule.properties.sourceAddressPrefixes = $SourceAddressPrefix
     }
 
-    if ($SourcePortRange.Length -eq 1) {
+    if ($SourcePortRange.Count -eq 1) {
         $rule.properties.sourcePortRange = $SourcePortRange[0]
     } else {
         $rule.properties.sourcePortRanges = $SourcePortRange
     }
 
-    if ($DestinationAddressPrefix.Length -eq 1) {
+    if ($SourceApplicationSecurityGroups) {
+        $sourceAsgIds = @()
+        foreach ($id in $SourceApplicationSecurityGroups) {
+            $asgId = [PsArmId]::New()
+            $asgId.Id = $id
+            $sourceAsgIds += $asgId
+        }
+        $rule.properties.sourceApplicationSecurityGroups += $sourceAsgIds
+    }
+
+
+    if ($DestinationAddressPrefix.Count -eq 1) {
         $rule.properties.destinationAddressPrefix = $DestinationAddressPrefix[0]
     } else {
         $rule.properties.destinationAddressPrefixes = $DestinationAddressPrefix
     }
 
-    if ($DestinationPortRange.Length -eq 1) {
+    if ($DestinationPortRange.Count -eq 1) {
         $rule.properties.destinationPortRange = $DestinationPortRange[0]
     } else {
         $rule.properties.destinationPortRanges = $DestinationPortRange
+    }
+
+    if ($DestinationApplicationSecurityGroups) {
+        $destinationAsgIds = @()
+        foreach ($id in $DestinationApplicationSecurityGroups) {
+            $asgId = [PsArmId]::New()
+            $asgId.Id = $id
+            $destinationAsgIds += $asgId
+        }
+        $rule.properties.destinationApplicationSecurityGroups += $destinationAsgIds
     }
 
     $nsg.properties.securityRules += $rule
