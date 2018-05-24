@@ -31,6 +31,7 @@ Class PsArmIpConfigProperties {
     [PsArmId] $subnet
     [array] $loadBalancerBackendAddressPools = @()
     [array] $loadBalancerInboundNatRules = @()
+    [array] $applicationSecurityGroups = @()
 }
 
 Class PsArmIpConfig {
@@ -134,7 +135,6 @@ Class PsArmNetworkInterfaceDnsSetting {
 Class PsArmNetworkInterfaceProperties {
     [array] $ipConfigurations = @()
     [PsArmNetworkInterfaceDnsSetting] $dnsSettings
-    [string] $enableIpFowarding = "false"
     [PsArmId] $networkSecurityGroup
 }
 
@@ -143,7 +143,7 @@ Class PsArmNetworkInterface {
     [string] $name
     [string] $type = 'Microsoft.Network/networkInterfaces'
     [PsArmNetworkInterfaceProperties] $properties
-    [string] $apiVersion = '2016-03-30'
+    [string] $apiVersion = '2017-10-01'
     [string] $location = '[resourceGroup().location]'
     [hashtable] $tags
     [array] $resources = @()
@@ -830,6 +830,9 @@ Function New-PsArmNetworkInterface
         [parameter(Mandatory=$False)]
         [string] $NetworkSecurityGroupId,
 
+        [parameter(Mandatory=$False)]
+        [array] $ApplicationSecurityGroupId,
+
         [parameter(Mandatory=$True)]
         [string] $SubnetId,
 
@@ -866,6 +869,15 @@ Function New-PsArmNetworkInterface
         $ipConfig.properties.privateIpAllocationMethod = 'Static'
     }
 
+    if ($ApplicationSecurityGroupId) {
+        $ipConfig.properties.ApplicationSecurityGroups = @()
+        foreach ($asg in $ApplicationSecurityGroupId) {
+            $item = [PsArmId]::New()
+            $item.id = $asg.Id
+            $ipConfig.properties.ApplicationSecurityGroups += $item
+        }
+    }
+
     # associate the PublicIp
     if ($PublicIpAddressId) {
         $ipConfig.properties.publicIpAddress = [PsArmId]::New()
@@ -895,7 +907,11 @@ Function New-PsArmNetworkInterface
     if ($NetworkSecurityGroupId) {
         $nic.properties.networkSecurityGroup = [PsArmId]::New()
         $nic.properties.networkSecurityGroup.id = $NetworkSecurityGroupId
-        $nic.dependsOn += $NetworkSecurityGroupId
+
+        if (-not $NetworkSecurityGroupId.StartsWith('/subscriptions/', 'CurrentCultureIgnoreCase')) {
+            # id was not in the subscription
+            $nic.dependsOn += $NetworkSecurityGroupId
+        }
     }
 
     return $nic
@@ -2283,6 +2299,9 @@ Function New-PsArmQuickVm
         [array] $NetworkSecurityGroupName,
 
         [Parameter(Mandatory=$False)]
+        [array] $ApplicationSecurityGroupNames,
+
+        [Parameter(Mandatory=$False)]
         [array] $dependsOn
     )
 
@@ -2473,12 +2492,28 @@ Function New-PsArmQuickVm
         # get cooresponding Nsg
         $thisNsgId = $null
         if ($NetworkSecurityGroupName -and $NetworkSecurityGroupName[$i]) {
-            $thisNsg = Find-AzureRmResource -ResourceType 'Microsoft.Network/networkSecurityGroups' -ResourceNameContains $NetworkSecurityGroupName[$i] | Where-Object {$_.Name -eq $NetworkSecurityGroupName[$i]}
+            $thisNsg = Get-AzureRmResource -ResourceType 'Microsoft.Network/networkSecurityGroups' -ResourceName $NetworkSecurityGroupName[$i]
             if ($thisNsg) {
                 $thisNsgId = $thisNsg.ResourceId
             } else {
-                Write-Verbose "Nsg $networkSecurityGroupName assumed to be in template"
-                $thisNsgId = "[resourceId('Microsoft.Network/networkSecurityGroups', '$networkSecurityGroupName')]"
+                Write-Verbose "Nsg $networkSecurityGroupName[$i] assumed to be in template"
+                $thisNsgId = "[resourceId('Microsoft.Network/networkSecurityGroups', '$networkSecurityGroupName[$i]')]"
+            }
+        }
+
+        # get cooresponding Asg
+        $asgs = @()
+        if ($ApplicationSecurityGroupNames) {
+            $existingAsgs = Get-AzureRmApplicationSecurityGroup
+            $asg = @()
+            foreach ($asgName in $ApplicationSecurityGroupNames) {
+                $asg += $existingAsgs | Where-Object {$_.Name -eq $asgName}
+                if ($asg.Count -eq 1) {
+                    $asgs += $asg[0]
+                } else {
+                    Write-Error "Unable to find ApplicationSecurityGroup ($asgName) in subscription"
+                    return
+                }
             }
         }
 
@@ -2491,7 +2526,7 @@ Function New-PsArmQuickVm
 
         # create the Nic
         $nicName = $vmName + "Nic" + $i.ToString()
-        $nic = New-PsArmNetworkInterface -Name $nicName -Location $location -SubnetId $thisSubnetId -PrivateIpAddress $thisIpAddress -PublicIpAddressId $publicIpAddressId -NetworkSecurityGroupId $thisNsgId -tags $tags
+        $nic = New-PsArmNetworkInterface -Name $nicName -Location $location -SubnetId $thisSubnetId -PrivateIpAddress $thisIpAddress -PublicIpAddressId $publicIpAddressId -NetworkSecurityGroupId $thisNsgId -ApplicationSecurityGroupId $asgs -tags $tags
 
         # add Nic to the resource
         $resources += $nic
@@ -2527,7 +2562,7 @@ Function New-PsArmQuickVm
                     $dataVhdStorageAccountName = $StorageAccountName
                 }
 
-                $dataVhdResource = Find-AzureRmResource -ResourceName $dataVhdStorageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
+                $dataVhdResource = Get-AzureRmResource -ResourceName $dataVhdStorageAccountName -ResourceType 'Microsoft.Storage/storageAccounts'
 
                 if ($dataVhdResource) {
                     $dataVhdStorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $($dataVhdResource.ResourceGroupName) -Name $dataVhdStorageAccountName -ErrorAction "Stop"
